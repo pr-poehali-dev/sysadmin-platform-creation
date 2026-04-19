@@ -69,9 +69,11 @@ def handler(event: dict, context) -> dict:
     except Exception:
         pass
 
-    # Добавляем CDN cookies к заголовкам основного запроса
-    if cdn_cookies:
-        request_headers['Cookie'] = cdn_cookies
+    # Мержим CDN cookies с HEALTH_CHECK_COOKIE из env
+    env_cookie = os.environ.get('HEALTH_CHECK_COOKIE', '').strip()
+    all_cookies = '; '.join(filter(None, [cdn_cookies, env_cookie]))
+    if all_cookies:
+        request_headers['Cookie'] = all_cookies
 
     # Делаем GET к target_url
     status_code = 0
