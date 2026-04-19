@@ -107,5 +107,6 @@ def handler(event: dict, context) -> dict:
             'auth_token_length': len(runtime_token),
             'db_debug': db_debug,
             'db_error': db_error,
+            'incoming_headers': event.get('headers', {}),
         })
     }
