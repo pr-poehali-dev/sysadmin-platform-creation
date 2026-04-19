@@ -1,19 +1,28 @@
 import json
 import os
+import ssl
 import urllib.request
 import urllib.parse
 import pg8000.native
 
+CA_CERT = '/usr/local/share/ca-certificates/yandex-internal-ca.crt'
+
 def get_db():
     dsn = os.environ['DATABASE_URL']
-    # DSN: postgresql://user:pass@host:port/dbname
     parsed = urllib.parse.urlparse(dsn)
+
+    ssl_context = None
+    if os.path.exists(CA_CERT):
+        ssl_context = ssl.create_default_context(cafile=CA_CERT)
+        ssl_context.check_hostname = False
+
     return pg8000.native.Connection(
         user=parsed.username,
         password=parsed.password,
         host=parsed.hostname,
-        port=parsed.port or 5432,
-        database=parsed.path.lstrip('/')
+        port=5432,
+        database=parsed.path.lstrip('/'),
+        ssl_context=ssl_context,
     )
 
 def handler(event: dict, context) -> dict:
