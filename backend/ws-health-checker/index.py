@@ -104,10 +104,12 @@ def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': cors_headers, 'body': ''}
 
-    # Авторизация
+    # Авторизация: сначала заголовок, потом query-параметр
     expected_token = os.environ.get('HEALTH_CHECK_TOKEN', '')
     auth_header = event.get('headers', {}).get('Authorization') or event.get('headers', {}).get('authorization', '')
     bearer = auth_header.removeprefix('Bearer ').strip()
+    if not bearer:
+        bearer = (event.get('queryStringParameters') or {}).get('token', '')
     if expected_token and bearer != expected_token:
         return {
             'statusCode': 401,
