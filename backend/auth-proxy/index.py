@@ -1,29 +1,11 @@
 import json
 import os
-import ssl
 import urllib.request
 import urllib.parse
-import pg8000.native
-
-CA_CERT = '/usr/local/share/ca-certificates/yandex-internal-ca.crt'
+import psycopg2
 
 def get_db():
-    dsn = os.environ['DATABASE_URL']
-    parsed = urllib.parse.urlparse(dsn)
-
-    ssl_context = None
-    if os.path.exists(CA_CERT):
-        ssl_context = ssl.create_default_context(cafile=CA_CERT)
-        ssl_context.check_hostname = False
-
-    return pg8000.native.Connection(
-        user=parsed.username,
-        password=parsed.password,
-        host=parsed.hostname,
-        port=5432,
-        database=parsed.path.lstrip('/'),
-        ssl_context=ssl_context,
-    )
+    return psycopg2.connect(os.environ['DATABASE_URL'])
 
 def handler(event: dict, context) -> dict:
     """
@@ -96,10 +78,13 @@ def handler(event: dict, context) -> dict:
     db_error = None
     try:
         conn = get_db()
-        conn.run(
-            "INSERT INTO proxy_log (target, status, response) VALUES (:target, :status, :response)",
-            target=target_url, status=status_code, response=response_text
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO proxy_log (target, status, response) VALUES (%s, %s, %s)",
+            (target_url, status_code, response_text)
         )
+        conn.commit()
+        cur.close()
         conn.close()
         db_logged = True
     except Exception as e:
