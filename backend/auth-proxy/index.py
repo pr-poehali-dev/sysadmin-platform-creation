@@ -122,6 +122,7 @@ def handler(event: dict, context) -> dict:
         'headers': {**cors_headers, 'Content-Type': 'application/json'},
         'body': json.dumps({
             'status': status_code,
+            'response_body': response_text,
             'response_length': len(response_text),
             'db_logged': db_logged,
             'auth_method': auth_method,
