@@ -69,16 +69,25 @@ def handler(event: dict, context) -> dict:
         status_code = 0
         response_text = str(e)
 
-    # Сохраняем в БД
-    conn = get_db()
-    conn.run(
-        "INSERT INTO proxy_log (target, status, response) VALUES (:target, :status, :response)",
-        target=target_url, status=status_code, response=response_text
-    )
-    conn.close()
+    # Сохраняем в БД (опционально — не блокирует ответ при ошибке)
+    db_logged = False
+    try:
+        conn = get_db()
+        conn.run(
+            "INSERT INTO proxy_log (target, status, response) VALUES (:target, :status, :response)",
+            target=target_url, status=status_code, response=response_text
+        )
+        conn.close()
+        db_logged = True
+    except Exception:
+        pass
 
     return {
         'statusCode': 200,
         'headers': {**cors_headers, 'Content-Type': 'application/json'},
-        'body': json.dumps({'status': status_code})
+        'body': json.dumps({
+            'status': status_code,
+            'response_length': len(response_text),
+            'db_logged': db_logged,
+        })
     }
