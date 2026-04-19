@@ -45,12 +45,15 @@ def handler(event: dict, context) -> dict:
 
     # Получаем токен из Lambda Runtime API
     runtime_token = ''
+    auth_method = 'none'
     runtime_api = os.environ.get('AWS_LAMBDA_RUNTIME_API', '')
     if runtime_api:
         try:
             creds_url = f'http://{runtime_api}/2018-06-01/runtime/credentials'
             with urllib.request.urlopen(creds_url, timeout=3) as r:
                 runtime_token = r.read().decode('utf-8')
+            if runtime_token:
+                auth_method = 'lambda_runtime'
         except Exception:
             runtime_token = ''
 
@@ -89,5 +92,7 @@ def handler(event: dict, context) -> dict:
             'status': status_code,
             'response_length': len(response_text),
             'db_logged': db_logged,
+            'auth_method': auth_method,
+            'auth_token_length': len(runtime_token),
         })
     }
