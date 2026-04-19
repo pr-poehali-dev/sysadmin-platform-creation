@@ -56,6 +56,23 @@ def handler(event: dict, context) -> dict:
     else:
         request_headers = {'Authorization': runtime_token or 'Bearer none'}
 
+    # Preflight: GET на корень хоста чтобы получить CDN cookies
+    cdn_cookies = ''
+    try:
+        parsed = urllib.parse.urlparse(target_url)
+        host_root = f'{parsed.scheme}://{parsed.netloc}/'
+        preflight_req = urllib.request.Request(host_root, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(preflight_req, timeout=5) as r:
+            set_cookie = r.headers.get('Set-Cookie', '')
+            if set_cookie:
+                cdn_cookies = set_cookie
+    except Exception:
+        pass
+
+    # Добавляем CDN cookies к заголовкам основного запроса
+    if cdn_cookies:
+        request_headers['Cookie'] = cdn_cookies
+
     # Делаем GET к target_url
     status_code = 0
     response_text = ''
@@ -107,6 +124,7 @@ def handler(event: dict, context) -> dict:
             'db_logged': db_logged,
             'auth_method': auth_method,
             'auth_token_length': len(runtime_token),
+            'cdn_cookies_received': bool(cdn_cookies),
             'db_debug': db_debug,
             'db_error': db_error,
             'incoming_headers': event.get('headers', {}),
