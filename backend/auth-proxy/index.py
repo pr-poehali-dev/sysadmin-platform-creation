@@ -72,8 +72,19 @@ def handler(event: dict, context) -> dict:
         status_code = 0
         response_text = str(e)
 
+    # Парсим DSN для отладки (без пароля)
+    _dsn = os.environ.get('DATABASE_URL', '')
+    _p = urllib.parse.urlparse(_dsn)
+    db_debug = {
+        'host': _p.hostname,
+        'port': _p.port,
+        'database': _p.path.lstrip('/'),
+        'user': _p.username,
+    }
+
     # Сохраняем в БД (опционально — не блокирует ответ при ошибке)
     db_logged = False
+    db_error = None
     try:
         conn = get_db()
         conn.run(
@@ -82,8 +93,8 @@ def handler(event: dict, context) -> dict:
         )
         conn.close()
         db_logged = True
-    except Exception:
-        pass
+    except Exception as e:
+        db_error = str(e)
 
     return {
         'statusCode': 200,
@@ -94,5 +105,7 @@ def handler(event: dict, context) -> dict:
             'db_logged': db_logged,
             'auth_method': auth_method,
             'auth_token_length': len(runtime_token),
+            'db_debug': db_debug,
+            'db_error': db_error,
         })
     }
