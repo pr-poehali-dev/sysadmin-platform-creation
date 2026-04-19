@@ -31,6 +31,7 @@ def handler(event: dict, context) -> dict:
 
     body = json.loads(event.get('body') or '{}')
     target_url = body.get('target_url', '').strip()
+    custom_headers = body.get('headers') if isinstance(body.get('headers'), dict) else None
     if not target_url:
         return {'statusCode': 400, 'headers': cors_headers, 'body': json.dumps({'error': 'target_url required'})}
 
@@ -48,11 +49,18 @@ def handler(event: dict, context) -> dict:
         except Exception:
             runtime_token = ''
 
-    # Делаем GET к target_url с заголовком Authorization
+    # Формируем заголовки для запроса
+    if custom_headers:
+        request_headers = {str(k): str(v) for k, v in custom_headers.items()}
+        auth_method = 'custom_headers'
+    else:
+        request_headers = {'Authorization': runtime_token or 'Bearer none'}
+
+    # Делаем GET к target_url
     status_code = 0
     response_text = ''
     try:
-        req = urllib.request.Request(target_url, headers={'Authorization': runtime_token or 'Bearer none'})
+        req = urllib.request.Request(target_url, headers=request_headers)
         with urllib.request.urlopen(req, timeout=10) as r:
             status_code = r.status
             response_text = r.read().decode('utf-8', errors='replace')[:4000]
