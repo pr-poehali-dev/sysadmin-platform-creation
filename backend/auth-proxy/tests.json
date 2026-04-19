@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Unauthorized without token",
+      "method": "POST",
+      "path": "/",
+      "body": {"target_url": "https://example.com"},
+      "expectedStatus": 401
+    }
+  ]
+}
