@@ -31,6 +31,10 @@ def handler(event: dict, context) -> dict:
 
     body = json.loads(event.get('body') or '{}')
     target_url = body.get('target_url', '').strip()
+    method = body.get('method', 'GET').upper()
+    if method not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE'):
+        method = 'GET'
+    request_body_data = body.get('request_body')
     custom_headers = body.get('headers') if isinstance(body.get('headers'), dict) else None
     if not target_url:
         return {'statusCode': 400, 'headers': cors_headers, 'body': json.dumps({'error': 'target_url required'})}
@@ -75,17 +79,27 @@ def handler(event: dict, context) -> dict:
     if all_cookies:
         request_headers['Cookie'] = all_cookies
 
-    # Делаем GET к target_url
+    # Делаем запрос к target_url
     status_code = 0
     response_text = ''
     try:
-        req = urllib.request.Request(target_url, headers=request_headers)
+        encoded_body = None
+        if method in ('POST', 'PUT', 'PATCH') and request_body_data is not None:
+            if isinstance(request_body_data, (dict, list)):
+                encoded_body = json.dumps(request_body_data).encode('utf-8')
+                request_headers.setdefault('Content-Type', 'application/json')
+            else:
+                encoded_body = str(request_body_data).encode('utf-8')
+        req = urllib.request.Request(target_url, data=encoded_body, headers=request_headers, method=method)
         with urllib.request.urlopen(req, timeout=10) as r:
             status_code = r.status
             response_text = r.read().decode('utf-8', errors='replace')[:4000]
     except urllib.error.HTTPError as e:
         status_code = e.code
-        response_text = str(e.reason)
+        try:
+            response_text = e.read().decode('utf-8', errors='replace')[:4000]
+        except Exception:
+            response_text = str(e.reason)
     except Exception as e:
         status_code = 0
         response_text = str(e)
