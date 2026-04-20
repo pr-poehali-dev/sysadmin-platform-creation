@@ -12,7 +12,7 @@ def get_db():
     return psycopg2.connect(os.environ['DATABASE_URL'])
 
 
-def _git_sync(body: dict, cors_headers: dict) -> dict:
+def _git_sync(body: dict, cors_headers: dict) -> dict:  # v2
     repo_url = body.get('repo_url', '').strip()
     auth_mode = body.get('auth_mode', 'token').strip()
     auth_value = body.get('auth_value', '').strip()
