@@ -28,16 +28,26 @@ def parse_target(target: str) -> tuple[str, int, str]:
     return raw, 443, path
 
 
-async def do_ws_check(target: str, sni: str, message: str | None, headers: dict, timeout: int) -> dict:
-    """Подключается по WSS к target, использует sni как server_hostname в TLS."""
+async def do_ws_check(target: str, sni: str, message: str | None, headers: dict, timeout: int, scheme: str) -> dict:
+    """Подключается по WS/WSS к target, использует sni как server_hostname в TLS (только для wss)."""
     host, port, path = parse_target(target)
 
-    ssl_ctx = ssl.create_default_context()
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
+    use_tls = scheme != 'ws'
+    ssl_ctx = None
+    if use_tls:
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        ssl_ctx.verify_mode = ssl.CERT_NONE
 
-    url = f"wss://{host}:{port}{path}"
+    url = f"{'wss' if use_tls else 'ws'}://{host}:{port}{path}"
     extra_headers = list(headers.items()) if headers else []
+
+    connect_kwargs = {
+        'ssl': ssl_ctx,
+        'additional_headers': extra_headers,
+    }
+    if use_tls:
+        connect_kwargs['server_hostname'] = sni or host
 
     start = time.monotonic()
     tls_version = None
@@ -46,12 +56,7 @@ async def do_ws_check(target: str, sni: str, message: str | None, headers: dict,
     response = None
 
     async with asyncio.timeout(timeout):
-        async with websockets.connect(
-            url,
-            ssl=ssl_ctx,
-            server_hostname=sni or host,
-            additional_headers=extra_headers,
-        ) as ws:
+        async with websockets.connect(url, **connect_kwargs) as ws:
             # Извлекаем TLS-данные из сокета
             raw_sock = ws.socket
             if hasattr(raw_sock, 'version'):
@@ -114,6 +119,9 @@ def handler(event: dict, context) -> dict:
     message = body.get('message')
     headers = body.get('headers') if isinstance(body.get('headers'), dict) else {}
     timeout = int(body.get('timeout') or 10)
+    scheme = body.get('scheme', 'wss').lower()
+    if scheme not in ('ws', 'wss'):
+        scheme = 'wss'
 
     if not target:
         return {
@@ -123,7 +131,7 @@ def handler(event: dict, context) -> dict:
         }
 
     try:
-        result = asyncio.run(do_ws_check(target, sni, message, headers, timeout))
+        result = asyncio.run(do_ws_check(target, sni, message, headers, timeout, scheme))
     except Exception as e:
         result = {
             'status': 'error',
