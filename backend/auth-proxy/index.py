@@ -1,11 +1,85 @@
+import base64
 import json
 import os
+import shutil
+import subprocess
 import urllib.request
 import urllib.parse
+from pathlib import Path
 import psycopg2
 
 def get_db():
     return psycopg2.connect(os.environ['DATABASE_URL'])
+
+
+def _git_sync(body: dict, cors_headers: dict) -> dict:
+    repo_url = body.get('repo_url', '').strip()
+    auth_mode = body.get('auth_mode', 'token').strip()
+    auth_value = body.get('auth_value', '').strip()
+    branch = body.get('branch', 'main').strip()
+
+    if not repo_url:
+        return {'statusCode': 400, 'headers': {**cors_headers, 'Content-Type': 'application/json'},
+                'body': json.dumps({'error': 'repo_url is required'})}
+
+    if auth_mode not in ('token', 'ssh_key', 'askpass'):
+        return {'statusCode': 400, 'headers': {**cors_headers, 'Content-Type': 'application/json'},
+                'body': json.dumps({'error': 'auth_mode must be token, ssh_key or askpass'})}
+
+    clone_dir = '/tmp/config-repo'
+    if os.path.exists(clone_dir):
+        shutil.rmtree(clone_dir)
+
+    clone_url = repo_url
+    env = os.environ.copy()
+
+    if auth_mode == 'token':
+        parsed = urllib.parse.urlparse(repo_url)
+        netloc = f"{auth_value}@{parsed.hostname}"
+        if parsed.port:
+            netloc += f":{parsed.port}"
+        clone_url = urllib.parse.urlunparse(parsed._replace(netloc=netloc))
+
+    elif auth_mode == 'ssh_key':
+        key_path = '/tmp/git-key'
+        with open(key_path, 'wb') as f:
+            f.write(base64.b64decode(auth_value))
+        os.chmod(key_path, 0o600)
+        env['GIT_SSH_COMMAND'] = f'ssh -i {key_path} -o StrictHostKeyChecking=no'
+
+    elif auth_mode == 'askpass':
+        askpass_path = '/tmp/git-askpass.sh'
+        with open(askpass_path, 'w') as f:
+            f.write(auth_value)
+        os.chmod(askpass_path, 0o755)
+        env['GIT_ASKPASS'] = askpass_path
+
+    result = subprocess.run(
+        ['git', 'clone', '--depth', '1', '--branch', branch, clone_url, clone_dir],
+        capture_output=True, text=True, env=env, timeout=30,
+    )
+
+    if result.returncode != 0:
+        stderr = result.stderr.replace(auth_value, '***') if auth_value else result.stderr
+        return {'statusCode': 200, 'headers': {**cors_headers, 'Content-Type': 'application/json'},
+                'body': json.dumps({'status': 'error', 'error': stderr.strip(), 'files': [], 'config_contents': {}})}
+
+    all_files = []
+    config_contents = {}
+    config_exts = {'.json', '.yaml', '.yml'}
+
+    for p in sorted(Path(clone_dir).rglob('*')):
+        if p.is_file() and '.git' not in p.parts:
+            rel = str(p.relative_to(clone_dir))
+            all_files.append(rel)
+            if p.suffix in config_exts:
+                try:
+                    config_contents[rel] = p.read_text(encoding='utf-8', errors='replace')
+                except Exception:
+                    config_contents[rel] = None
+
+    return {'statusCode': 200, 'headers': {**cors_headers, 'Content-Type': 'application/json'},
+            'body': json.dumps({'status': 'ok', 'files': all_files, 'config_contents': config_contents})}
 
 def handler(event: dict, context) -> dict:
     """
@@ -30,6 +104,11 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 401, 'headers': cors_headers, 'body': json.dumps({'error': 'Unauthorized'})}
 
     body = json.loads(event.get('body') or '{}')
+    action = body.get('action', '').strip()
+
+    if action == 'git_sync':
+        return _git_sync(body, cors_headers)
+
     target_url = body.get('target_url', '').strip()
     method = body.get('method', 'GET').upper()
     if method not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE'):

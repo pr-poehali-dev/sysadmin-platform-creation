@@ -12,6 +12,23 @@
       "path": "/",
       "body": {"target_url": "https://example.com"},
       "expectedStatus": 401
+    },
+    {
+      "name": "git_sync unauthorized",
+      "method": "POST",
+      "path": "/",
+      "body": {"action": "git_sync", "repo_url": "https://github.com/example/repo.git"},
+      "expectedStatus": 401
+    },
+    {
+      "name": "git_sync missing repo_url",
+      "method": "POST",
+      "path": "/",
+      "headers": {"Authorization": ""},
+      "body": {"action": "git_sync", "auth_mode": "token"},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "repo_url is required"},
+      "bodyMatcher": "partial"
     }
   ]
 }
