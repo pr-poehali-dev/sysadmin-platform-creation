@@ -28,11 +28,11 @@ def parse_target(target: str) -> tuple[str, int, str]:
     return raw, 443, path
 
 
-async def do_ws_check(target: str, sni: str, message: str | None, headers: dict, timeout: int, scheme: str) -> dict:
+async def do_ws_check(target: str, sni: str, message: str | None, headers: dict, timeout: int, scheme: str, use_ssl: bool) -> dict:
     """Подключается по WS/WSS к target, использует sni как server_hostname в TLS (только для wss)."""
     host, port, path = parse_target(target)
 
-    use_tls = scheme != 'ws'
+    use_tls = use_ssl and scheme != 'ws'
     ssl_ctx = None
     if use_tls:
         ssl_ctx = ssl.create_default_context()
@@ -57,18 +57,19 @@ async def do_ws_check(target: str, sni: str, message: str | None, headers: dict,
 
     async with asyncio.timeout(timeout):
         async with websockets.connect(url, **connect_kwargs) as ws:
-            # Извлекаем TLS-данные из сокета
-            raw_sock = ws.socket
-            if hasattr(raw_sock, 'version'):
-                tls_version = raw_sock.version()
-            if hasattr(raw_sock, 'cipher'):
-                cipher_info = raw_sock.cipher()
-                tls_cipher = cipher_info[0] if cipher_info else None
-            if hasattr(raw_sock, 'getpeercert'):
-                cert = raw_sock.getpeercert()
-                if cert:
-                    subject = dict(x[0] for x in cert.get('subject', []))
-                    cert_subject = subject.get('commonName') or str(subject)
+            # Извлекаем TLS-данные через transport (websockets 14+ API)
+            try:
+                ssl_obj = ws.transport.get_extra_info('ssl_object')
+                if ssl_obj:
+                    tls_version = ssl_obj.version()
+                    cipher_info = ssl_obj.cipher()
+                    tls_cipher = cipher_info[0] if cipher_info else None
+                    cert = ssl_obj.getpeercert()
+                    if cert:
+                        subject = dict(x[0] for x in cert.get('subject', []))
+                        cert_subject = subject.get('commonName') or str(subject)
+            except Exception:
+                pass
 
             if message:
                 await ws.send(message)
@@ -81,7 +82,7 @@ async def do_ws_check(target: str, sni: str, message: str | None, headers: dict,
     latency_ms = int((time.monotonic() - start) * 1000)
     return {
         'status': 'ok',
-        'response': str(response)[:4000] if response is not None else '',
+        'response': str(response) if response is not None else '',
         'latency_ms': latency_ms,
         'tls_version': tls_version,
         'tls_cipher': tls_cipher,
@@ -122,6 +123,9 @@ def handler(event: dict, context) -> dict:
     scheme = body.get('scheme', 'wss').lower()
     if scheme not in ('ws', 'wss'):
         scheme = 'wss'
+    use_ssl = body.get('use_ssl', True)
+    if not isinstance(use_ssl, bool):
+        use_ssl = str(use_ssl).lower() not in ('false', '0', 'no')
 
     if not target:
         return {
@@ -131,7 +135,7 @@ def handler(event: dict, context) -> dict:
         }
 
     try:
-        result = asyncio.run(do_ws_check(target, sni, message, headers, timeout, scheme))
+        result = asyncio.run(do_ws_check(target, sni, message, headers, timeout, scheme, use_ssl))
     except Exception as e:
         result = {
             'status': 'error',
