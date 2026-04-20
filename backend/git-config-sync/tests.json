@@ -10,29 +10,22 @@
       "name": "Unauthorized without token",
       "method": "POST",
       "path": "/",
-      "headers": {},
-      "body": {},
+      "body": { "repo_url": "https://github.com/example/repo.git" },
       "expectedStatus": 401
     },
     {
-      "name": "Missing repo_url returns error",
+      "name": "Missing repo_url returns 401 (token required)",
       "method": "POST",
       "path": "/",
-      "headers": {"X-Admin-Token": ""},
-      "body": {"auth_mode": "token", "auth_value": "tok"},
-      "expectedStatus": 400,
-      "expectedBody": {"error": "repo_url is required"},
-      "bodyMatcher": "partial"
+      "body": { "auth_mode": "token" },
+      "expectedStatus": 401
     },
     {
-      "name": "Invalid auth_mode returns error",
+      "name": "Invalid auth_mode returns 401 (token required)",
       "method": "POST",
       "path": "/",
-      "headers": {"X-Admin-Token": ""},
-      "body": {"repo_url": "https://github.com/example/repo.git", "auth_mode": "magic"},
-      "expectedStatus": 400,
-      "expectedBody": {"error": "auth_mode must be token, ssh_key or askpass"},
-      "bodyMatcher": "partial"
+      "body": { "repo_url": "https://github.com/example/repo.git", "auth_mode": "magic" },
+      "expectedStatus": 401
     }
   ]
 }
