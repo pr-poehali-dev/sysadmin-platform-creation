@@ -1,4 +1,5 @@
 {
+  "tls-ws-monitor": "https://functions.poehali.dev/a5f9090d-8c23-484f-80c9-699cd97a78bf",
   "ws-health-checker": "https://functions.poehali.dev/111de1cd-4164-44ea-b1ef-f18465549a9d",
   "proxy-logs": "https://functions.poehali.dev/66527f53-af98-4478-a252-71e4fff6ae25",
   "auth-proxy": "https://functions.poehali.dev/2912cf16-7e42-4d5d-89d2-fb673d1fc0c8"

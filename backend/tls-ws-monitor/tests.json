@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Unauthorized without token",
+      "method": "POST",
+      "path": "/",
+      "body": {"target": "1.2.3.4:443"},
+      "expectedStatus": 401
+    },
+    {
+      "name": "Missing target returns error",
+      "method": "POST",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 401
+    }
+  ]
+}
