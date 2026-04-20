@@ -118,7 +118,10 @@ def handler(event: dict, context) -> dict:
     target = body.get('target', '').strip()
     sni = body.get('sni', '').strip()
     message = body.get('message')
-    headers = body.get('headers') if isinstance(body.get('headers'), dict) else {}
+    headers = dict(body.get('headers')) if isinstance(body.get('headers'), dict) else {}
+    cookies = body.get('cookies', '').strip()
+    if cookies:
+        headers['Cookie'] = cookies
     timeout = int(body.get('timeout') or 10)
     scheme = body.get('scheme', 'wss').lower()
     if scheme not in ('ws', 'wss'):
